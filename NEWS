@@ -26,6 +26,8 @@ Incompatible changes
   the default behaviour as well. See the `relevant documentation section
   <https://www.knot-resolver.cz/documentation/latest/config-cache-predict.html>`_
   for more.
+- /local-data/root-fallback-addresses-file: only allow one file (and call it singular)
+  Using multiple sets of fallback addresses does not work anyway (!1534).
 
 Bugfixes
 --------
