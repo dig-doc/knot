@@ -77,6 +77,8 @@ It provides various input formats described in following subsections.
           34.example.com  AAAA  2001:db8::3
           34.example.com  AAAA  2001:db8::4
 
+   .. _config-local-data-rpz:
+
    Response Policy Zones (RPZ)
    ---------------------------
 
