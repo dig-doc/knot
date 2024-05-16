@@ -6,7 +6,7 @@
 Cloning the repository
 **********************
 
-.. note:: Latest up-to-date packages for various distribution can be obtained
+.. note:: Latest up-to-date packages for various distributions can be obtained
    from web `<https://knot-resolver.cz/download/>`_.
 
 Knot Resolver is written for UNIX-like systems using modern C standards.
@@ -75,7 +75,9 @@ Dependencies
 ============
 
 .. note:: This section lists basic requirements. Individual modules
-   might have additional build or runtime dependencies.
+   might have additional build or runtime dependencies. You may also use ``apkg
+   build-dep`` from the above section to install the dependencies, then build
+   Knot Resolver manually using Meson.
 
 The following dependencies are needed to build and run Knot Resolver with core functions:
 
@@ -95,8 +97,6 @@ The following dependencies are needed to build and run Knot Resolver with core f
 There are also *optional* packages that enable specific functionality in Knot
 Resolver:
 
-.. TODO cqueues is really used on multiple places, sometimes indirectly
-
 .. csv-table::
    :header: "Optional", "Needed for", "Notes"
 
@@ -110,20 +110,17 @@ Resolver:
    "cmocka_", "``unit tests``", "Unit testing framework."
    "dnsdist_", "``proxyv2 test``", "DNS proxy server"
    "Doxygen_", "``documentation``", "Generating API documentation."
-   "Sphinx_, sphinx-tabs_ and sphinx_rtd_theme_", "``documentation``", "Building this
-   documentation."
+   "Sphinx_, sphinx-tabs_, and sphinx_rtd_theme_", "``documentation``", "Building this documentation."
    "breathe_", "``documentation``", "Exposing Doxygen API doc to Sphinx."
-   "libprotobuf_ 3.0+", "``modules/dnstap``", "Protocol Buffers support for
-   dnstap_."
+   "libprotobuf_ 3.0+", "``modules/dnstap``", "Protocol Buffers support for dnstap_."
    "`libprotobuf-c`_ 1.0+", "``modules/dnstap``", "C bindings for Protobuf."
-   "libfstrm_ 0.2+", "``modules/dnstap``", "Frame Streams data transport
-   protocol."
+   "libfstrm_ 0.2+", "``modules/dnstap``", "Frame Streams data transport protocol."
    "luacheck_", "``lint-lua``", "Syntax and static analysis checker for Lua."
    "`clang-tidy`_", "``lint-c``", "Syntax and static analysis checker for C."
    "luacov_", "``check-config``", "Code coverage analysis for Lua modules."
 
 .. [#] If ``meson >= 0.49`` isn't available for your distro, check backports
-   repository or use python pip to install it.
+   repository or use python pipx to install it.
 .. [#] Requires ``__attribute__((cleanup))`` and ``-MMD -MP`` for
    dependency file generation. We test GCC and Clang, and ICC is likely to work as well.
 .. [#] You can use variables ``<dependency>_CFLAGS`` and ``<dependency>_LIBS``
@@ -149,12 +146,11 @@ here's an overview for several platforms.
 Compilation
 ===========
 
-Folowing meson command creates new build directory named ``build_dir``, configures installation path to ``/tmp/kr`` and enables static build (to allow installation to non-standard path).
-You can also configure some :ref:`build-options`, in this case enable ``manager``, which is disabled by default.
+The following meson command creates a new build directory named ``build_dir`` and configures the installation path to ``/tmp/kr``.
 
 .. code-block:: bash
 
-   $ meson build_dir --prefix=/tmp/kr
+   $ meson setup build_dir --prefix=/tmp/kr
 
 After that it is possible to build and install Knot Resolver.
 
@@ -297,8 +293,9 @@ its parent directories are writable by kresd process (after package installation
 Installing the manager from source
 **********************************
 
-Additional dependencies are needed to run Knot Resolver with the ``manager``.
-All dependencies are also listed in `pyproject.toml <https://gitlab.nic.cz/knot/knot-resolver/-/blob/master/manager/pyproject.toml>`_ which is our authoritative source.
+Additional dependencies are needed to build and run Knot Resolver with the ``manager``.
+All dependencies are also listed in `pyproject.toml <https://gitlab.nic.cz/knot/knot-resolver/-/blob/manager/manager/pyproject.toml>`_ which is our authoritative source.
+Please note that starting with version 6, Knot Resolver is only officially supported in conjunction with ``manager``.
 
 .. csv-table::
    :header: "Requirement", "Notes"
@@ -370,3 +367,4 @@ For development, it's possible to build the container directly from your git tre
 .. _aiohttp: https://docs.aiohttp.org/
 .. _prometheus-client: https://github.com/prometheus/client_python
 .. _typing-extensions: https://pypi.org/project/typing-extensions/
+.. _supervisor: http://supervisord.org/

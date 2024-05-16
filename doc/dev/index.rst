@@ -14,7 +14,7 @@ Knot Resolver developer documentation
 Welcome to Knot Resolver's documentation for developers and advanced users!
 
 .. toctree::
-   :caption: Building for sources
+   :caption: Building from sources
    :name: build-chapter
    :maxdepth: 1
 
