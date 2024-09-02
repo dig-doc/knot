@@ -418,6 +418,7 @@ static int start_listening(flagged_fd_array_t *fds) {
 	return some_bad_ret;
 }
 
+#if !ENABLE_LIBSYSTEMD
 /* Notify supervisord about successful inicialization
  * @note tested only on an abstract address in $NOTIFY_SOCKET*/
 static int notify_ready(const char *state)
@@ -456,6 +457,7 @@ static int notify_ready(const char *state)
 	close(sockfd);
 	return kr_ok();
 }
+#endif /* if !ENABLE_LIBSYSTEMD */
 
 /* Drop POSIX 1003.1e capabilities. */
 static void drop_capabilities(void)
