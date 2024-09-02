@@ -36,6 +36,8 @@
 #include <uv.h>
 #if ENABLE_LIBSYSTEMD
 #include <systemd/sd-daemon.h>
+#else
+static int notify_ready(const char *state);
 #endif
 #include <libknot/error.h>
 
@@ -68,7 +70,6 @@ KR_EXPORT const char *malloc_conf = "narenas:1";
 #define TCP_BACKLOG_DEFAULT 128
 #endif
 
-static int notify_ready(const char *state);
 
 /** I don't know why linker is dropping these functions otherwise. TODO: revisit. */
 KR_EXPORT void kr_misc_unused(void)
