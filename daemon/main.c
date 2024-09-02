@@ -68,6 +68,8 @@ KR_EXPORT const char *malloc_conf = "narenas:1";
 #define TCP_BACKLOG_DEFAULT 128
 #endif
 
+static int notify_ready(const char *state);
+
 /** I don't know why linker is dropping these functions otherwise. TODO: revisit. */
 KR_EXPORT void kr_misc_unused(void)
 {
@@ -209,6 +211,8 @@ static int run_worker(uv_loop_t *loop, bool leader, struct args *args)
 	/* Notify supervisor. */
 #if ENABLE_LIBSYSTEMD
 	sd_notify(0, "READY=1");
+#else
+	notify_ready("READY=1");
 #endif
 	/* Run event loop */
 	uv_run(loop, UV_RUN_DEFAULT);
@@ -412,6 +416,45 @@ static int start_listening(flagged_fd_array_t *fds) {
 		}
 	}
 	return some_bad_ret;
+}
+
+/* Notify supervisord about successful inicialization
+ * @note tested only on an abstract address in $NOTIFY_SOCKET*/
+static int notify_ready(const char *state)
+{
+	int sockfd;
+	struct sockaddr_un addr;
+	char *socket_path = getenv("NOTIFY_SOCKET");
+	if (!socket_path) {
+		kr_log_error(WORKER, "Failed retrieving env variable $NOTIFY_SOCKET\n");
+		return EXIT_FAILURE;
+	}
+	if ((sockfd = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
+		kr_log_error(WORKER, "Failed to create unix socket at $NOTIFY_SOCKET ('%s'): %s\n",
+				socket_path, strerror(errno));
+		return EXIT_FAILURE;
+	}
+
+	addr.sun_family = AF_UNIX;
+
+	int addrlen;
+	if (socket_path[0] == '@') {
+		addr.sun_path[0] = '\0';
+		strncpy(&addr.sun_path[1], socket_path + 1, sizeof(addr.sun_path) - 2);
+		addrlen = offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path + 1) + 1;
+	} else {
+		strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path) - 1);
+		addrlen = offsetof(struct sockaddr_un, sun_path) + strlen(addr.sun_path) + 1;
+	}
+	if (sendto(sockfd, state, strlen(state), 0, &addr, addrlen) == -1) {
+		kr_log_error(WORKER, "Failed to send notify message to '%s': %s\n",
+			socket_path, strerror(errno));
+		close(sockfd);
+		return EXIT_FAILURE;
+	}
+
+	close(sockfd);
+	return kr_ok();
 }
 
 /* Drop POSIX 1003.1e capabilities. */
