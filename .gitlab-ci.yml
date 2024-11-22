@@ -22,3 +22,6 @@ stages:
   - test
   - deploy
   - release
+
+include:
+  - ci/config/docs.yml
