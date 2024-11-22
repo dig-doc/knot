@@ -1,7 +1,7 @@
 # docs: {{{
 
 docs:build:
-  stage: deploy
+  stage: build
   needs: []
   script:
     - git submodule update --init --recursive
@@ -13,50 +13,24 @@ docs:build:
     paths:
       - doc/html
 
-# This job deploys the Knot Resolver documentation into a development
-# environment, which may be found at
-# <https://gitlab.nic.cz/knot/knot-resolver/-/environments/folders/docs-develop>.
-# The actual URL is found in the `environment.url` property, where
-# $CI_PROJECT_NAMESPACE will be "knot" on the upstream GitLab.
-docs:develop:
+# This job deploys the Knot Resolver documentation into the GitLab environment.
+# https://gitlab.nic.cz/knot/knot-resolver/-/environments/folders/docs
+docs:environment:
   stage: deploy
   needs:
     - docs:build
-  except:
-    refs:
-      - tags
   script:
-    - echo "Propagating artifacts into develop environment"
+    - echo "Propagating 'doc/html' artifacts into GitLab's environment"
   artifacts:
     paths:
       - doc/html
   environment:
-    name: docs-develop/$CI_COMMIT_REF_NAME
+    name: docs/$CI_COMMIT_REF_NAME
     url: https://www.knot-resolver.cz/documentation/artifacts/$CI_JOB_ID/index.html
 
-# This job deploys the Knot Resolver documentation into a release environment,
-# which may be found at
-# <https://gitlab.nic.cz/knot/knot-resolver/-/environments/folders/docs-release>.
-# The actual URL is found in the `environment.url` property, where
-# $CI_PROJECT_NAMESPACE will be "knot" on the upstream GitLab.
-# The job requires the `DOCS_ENV_NAME` variable to be set by the user.
-docs:release:
-  stage: deploy
-  needs:
-    - docs:build
-  only:
-    refs:
-      - tags
-  script: echo "Propagating artifacts into release environment"
-  artifacts:
-    paths:
-      - doc/html
-  environment:
-    name: docs-release/$CI_COMMIT_TAG
-    url: https://www.knot-resolver.cz/documentation/artifacts/$CI_JOB_ID/index.html
-
-# This job deploys the current docs as <https://knot.pages.nic.cz/knot-resolver>
-pages:
+# This job deploys the Knot Resolver documentation to the GitLab pages.
+# https://knot.pages.nic.cz/knot-resolver
+docs:pages:
   stage: deploy
   needs:
     - docs:build
@@ -66,12 +40,14 @@ pages:
     paths:
       - public
 
-# This job pushes the Knot Resolver documentation into a new branch of the
-# `websites/knot-resolver.cz` repository.
+# Pushes the documentation into a new branch of the website repository.
+# https://gitlab.nic.cz/websites/knot-resolver.cz
 docs:website:
-  stage: deploy
+  stage: release
   needs:
     - docs:build
+  only:
+    - tags
   when: manual
   variables:
   script:
