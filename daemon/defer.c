@@ -416,6 +416,8 @@ static enum protolayer_iter_cb_result pl_defer_unwrap(
 	if (!defer || ctx->session->outgoing)
 		return protolayer_continue(ctx);
 
+	return protolayer_continue(ctx);
+
 	defer_sample_addr((const union kr_sockaddr *)ctx->comm->src_addr, ctx->session->stream);
 	struct pl_defer_iter_data *data = iter_data;
 	struct pl_defer_sess_data *sdata = sess_data;
