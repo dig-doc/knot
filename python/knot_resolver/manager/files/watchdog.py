@@ -90,10 +90,12 @@ if _watchdog:
             self._observer.schedule(
                 event_handler,
                 str(self._cert_file),
+                recursive=False,
             )
             self._observer.schedule(
                 event_handler,
                 str(self._key_file),
+                recursive=False,
             )
 
         def reschedule(self) -> None:
