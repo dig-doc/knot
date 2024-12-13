@@ -23,4 +23,4 @@ To run the Docker container with the host network, use the following command:
 
 .. code-block:: bash
 
-    docker run --network host knot-resolver-coap
+    docker run --network=host knot-resolver-coap
