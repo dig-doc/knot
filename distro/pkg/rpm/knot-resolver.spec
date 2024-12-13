@@ -263,6 +263,7 @@ getent passwd knot-resolver >/dev/null || useradd -r -g knot-resolver -d %{_sysc
 %{_libdir}/knot-resolver/*.lua
 %dir %{_libdir}/knot-resolver/kres_modules
 %{_libdir}/knot-resolver/kres_modules/bogus_log.so
+%{_libdir}/knot-resolver/kres_modules/coap.so
 %{_libdir}/knot-resolver/kres_modules/edns_keepalive.so
 %{_libdir}/knot-resolver/kres_modules/extended_error.so
 %{_libdir}/knot-resolver/kres_modules/hints.so

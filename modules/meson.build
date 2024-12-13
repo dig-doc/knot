@@ -46,6 +46,7 @@ mod_deps = [
 # handle more complex C/LUA modules separately
 subdir('bogus_log')
 # cookies module is not currently used
+subdir('coap')
 subdir('daf')
 subdir('dnstap')
 subdir('edns_keepalive')
