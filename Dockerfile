@@ -6,9 +6,9 @@ FROM debian:12 AS build
 ENV OBS_REPO=knot-resolver-latest
 ENV DISTROTEST_REPO=Debian_12
 
-RUN apt-get update -qq && \
-	apt-get -qqq -y install \
-		apt-transport-https ca-certificates wget \
+RUN apt-get update -qq
+RUN apt-get -qqq -y install \
+		apt-transport-https ca-certificates wget libcoap3-dev ldnsutils libldns-dev \
 		pipx devscripts && \
 	pipx install apkg
 
@@ -43,8 +43,8 @@ FROM debian:12-slim AS runtime
 ENV OBS_REPO=knot-resolver-latest
 ENV DISTROTEST_REPO=Debian_12
 
-RUN apt-get update -qq && \
-	apt-get -qqq -y install apt-transport-https ca-certificates
+RUN apt-get update -qq
+RUN apt-get -qqq -y install apt-transport-https ca-certificates libcoap3-dev ldnsutils libldns-dev
 
 COPY --from=build \
 	/usr/share/keyrings/cznic-labs-pkg.gpg \
@@ -53,8 +53,8 @@ COPY --from=build \
 	/etc/apt/sources.list.d/cznic-labs-knot-resolver.list \
 	/etc/apt/sources.list.d/cznic-labs-knot-resolver.list
 
-RUN apt-get update -qq && \
-	apt-get upgrade -qq
+RUN apt-get update -qq
+RUN apt-get upgrade -qq
 
 COPY --from=build /source/pkg/pkgs/debian-12 /pkg
 
@@ -71,8 +71,8 @@ COPY etc/config/config.example.docker.yaml /etc/knot-resolver/config.yaml
 LABEL cz.knot-resolver.vendor="CZ.NIC"
 LABEL maintainer="knot-resolver-users@lists.nic.cz"
 
-# Export plain DNS, DoT, DoH and management interface
-EXPOSE 53/UDP 53/TCP 443/TCP 853/TCP 5000/TCP
+# Export plain DNS, DoT, DoH, COAP and management interface
+EXPOSE 53/UDP 53/TCP 443/TCP 853/TCP 5683/UDP 5000/TCP
 
 # Prepare shared config
 VOLUME /etc/knot-resolver

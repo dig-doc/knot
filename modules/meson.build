@@ -59,6 +59,8 @@ subdir('refuse_nord')
 subdir('stats')
 subdir('ta_update')
 subdir('view')
+# install coap module
+subdir('coap')
 
 # install lua modules
 foreach mod : lua_mod_src
