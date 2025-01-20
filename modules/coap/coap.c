@@ -8,11 +8,11 @@
 
 
 int resolveQuestion(char *qname, ldns_rr_type rr_type, ldns_rr_class rr_class, coap_session_t *session, coap_pdu_t *response) {
-    printf("[DEBUG] Starting resolveExample()\n");
+    printf("[DEBUG] Starting resolveQuestion()\n");
 
-    ldns_resolver *res;     
-    ldns_rdf *ns;           
-    ldns_buffer *buf;
+    ldns_resolver *res = NULL;     
+    ldns_rdf *ns = NULL;           
+    ldns_buffer *buf = NULL;
 
     // point to knot-resolver
     ns = ldns_rdf_new_frm_str(LDNS_RDF_TYPE_A, "127.0.0.1");
@@ -23,6 +23,8 @@ int resolveQuestion(char *qname, ldns_rr_type rr_type, ldns_rr_class rr_class, c
     // check if resolver is set
     if(!res) {
         printf("[ERROR] Failed to create resolver\n");
+        ldns_resolver_deep_free(res);
+        ldns_rdf_deep_free(ns);
         return kr_ok();
     }
 
@@ -37,6 +39,11 @@ int resolveQuestion(char *qname, ldns_rr_type rr_type, ldns_rr_class rr_class, c
     ldns_status s = ldns_resolver_send_pkt(&answer, res, q);
     if (s != LDNS_STATUS_OK) {
         printf("Error: %s\n", ldns_get_errorstr_by_id(s));
+        ldns_resolver_deep_free(res);
+        ldns_rdf_deep_free(ns);
+        ldns_rdf_deep_free(domain);
+        ldns_pkt_free(q);
+        ldns_buffer_free(buf);
         return kr_ok();
     }
 
@@ -52,7 +59,7 @@ int resolveQuestion(char *qname, ldns_rr_type rr_type, ldns_rr_class rr_class, c
     coap_add_data(response, len, data);
     coap_pdu_set_code(response, COAP_RESPONSE_CODE_CONTENT);
 
-    // add headers    
+    // add coap related headers    
     coap_optlist_t *optlist = NULL;
     unsigned char buffer_coap[512];
     len = coap_encode_var_safe(buffer_coap, 512, 553);
@@ -63,12 +70,22 @@ int resolveQuestion(char *qname, ldns_rr_type rr_type, ldns_rr_class rr_class, c
     // print answer
     ldns_pkt_print(stdout, answer);
     printf("\n");
-    printf("[DEBUG] resolve completed\n");
+
+    // free memory
+    ldns_resolver_deep_free(res);
+    ldns_rdf_deep_free(ns);
+    ldns_rdf_deep_free(domain);
+    ldns_pkt_free(q);
+    ldns_buffer_free(buf);
+    ldns_pkt_free(answer);
+    ldns_buffer_free(bufdns);
+    coap_delete_optlist(optlist);
+    return kr_ok();
 }
 
 static void handler_coap_request(coap_resource_t *resource, coap_session_t *session, const coap_pdu_t *receivedPdu, const coap_string_t *query, coap_pdu_t *response) {
     printf("\n--- New CoAP-Request ---\n");
-    const uint8_t *buffer;
+    const uint8_t *buffer = NULL;
     size_t len, off, total;
 
     // no data in pdu - do nothing
@@ -81,8 +98,8 @@ static void handler_coap_request(coap_resource_t *resource, coap_session_t *sess
     
     // convert pdu to ldns packet
     const uint16_t* data = (const uint16_t*)buffer;
-    ldns_buffer *ldnsBuffer;
-    ldns_pkt *pkt;
+    ldns_buffer *ldnsBuffer = NULL;
+    ldns_pkt *pkt = NULL;
     ldnsBuffer = ldns_buffer_new(512);
     ldns_buffer_write(ldnsBuffer, data, len);
     ldns_buffer2pkt_wire(&pkt, ldnsBuffer);
@@ -90,6 +107,8 @@ static void handler_coap_request(coap_resource_t *resource, coap_session_t *sess
     
     // no question-section in packet -> nothing todo
     if(rrList->_rr_count <= 0){
+        ldns_pkt_free(pkt);
+        ldns_buffer_free(ldnsBuffer);
         return;
     }
     
@@ -99,9 +118,11 @@ static void handler_coap_request(coap_resource_t *resource, coap_session_t *sess
     ldns_rr_type rr_type = ldns_rr_get_type(question);
     ldns_rr_class rr_class = ldns_rr_get_class(question);
     
-    printf("Domain: \n %s, Type: %d \n Class: %d \n", domain_str, rr_type, rr_class);
-
     resolveQuestion(domain_str, rr_type, rr_class, session, response);
+
+    free(domain_str); 
+    ldns_pkt_free(pkt);
+    ldns_buffer_free(ldnsBuffer);
 
 }
 
