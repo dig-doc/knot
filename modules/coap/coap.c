@@ -1,17 +1,19 @@
 #include <pthread.h>
-#include <errno.h> 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <coap3/coap.h>
 #include <ldns/ldns.h>
 #include "lib/module.h"
+#include "daemon/engine.h"
+#include <ccan/json/json.h>
 
 
 int resolveQuestion(char *qname, ldns_rr_type rr_type, ldns_rr_class rr_class, coap_session_t *session, coap_pdu_t *response) {
     printf("[DEBUG] Starting resolveQuestion()\n");
 
-    ldns_resolver *res = NULL;     
-    ldns_rdf *ns = NULL;           
+    ldns_resolver *res = NULL;
+    ldns_rdf *ns = NULL;
     ldns_buffer *buf = NULL;
 
     // point to knot-resolver
@@ -33,7 +35,7 @@ int resolveQuestion(char *qname, ldns_rr_type rr_type, ldns_rr_class rr_class, c
     ldns_pkt *q = ldns_pkt_query_new(domain, rr_type, rr_class, LDNS_RD);
     buf = ldns_buffer_new(512);
     ldns_pkt2buffer_wire(buf, q);
-    
+
     // dns answer
     ldns_pkt *answer;
     ldns_status s = ldns_resolver_send_pkt(&answer, res, q);
@@ -182,6 +184,140 @@ static void* run_coap_server(void *arg) {
     return;
 }
 
+// CONFIG BEGIN
+struct kr_coap_settings {
+    char* host;
+    int port;
+};
+
+struct kr_coap_ctx {
+    struct kr_coap_settings config;
+};
+
+static void kr_coap_ctx_init(struct kr_coap_ctx *ctx)
+{
+    if (!ctx) {
+        return;
+    }
+
+    memset(ctx, 0, sizeof(*ctx));
+
+    ctx->config.host = "127.0.0.1";
+    ctx->config.port = 53;
+}
+
+int config_init(struct kr_coap_ctx *ctx)
+{
+    if (!ctx) {
+        return kr_error(EINVAL);
+    }
+
+    kr_coap_ctx_init(ctx);
+
+    return kr_ok();
+}
+
+void config_deinit(struct kr_coap_ctx *ctx)
+{
+    if (!ctx) {
+        return;
+    }
+
+    free(ctx->config.host);
+    ctx->config.host = NULL;
+
+    free(ctx->config.port);
+    ctx->config.port = NULL;
+}
+
+static void apply_changes(const JsonNode *host,
+                          const JsonNode *port)
+{
+    if (kr_fails_assert(host && port)) {
+        return;
+    }
+
+    kr_assert(host->tag == JSON_STRING);
+    kr_assert(port->tag == JSON_NUMBER);
+
+    // TODO: Apply to running process
+    //host->string_;
+    //(int) host->number_;
+    printf(host->string_);
+}
+
+static bool config_apply_json(JsonNode *root_node)
+{
+    if (kr_fails_assert(root_node)) {
+        return false;
+    }
+
+    const JsonNode *host = json_find_member(root_node, "host");
+    const JsonNode *port = json_find_member(root_node, "port");
+
+    apply_changes(host, port);
+
+    return true;
+}
+
+bool config_apply(struct kr_coap_ctx *ctx, const char *args)
+{
+    if (!ctx) {
+        return false;
+    }
+
+    if (!args || !strlen(args)) {
+        return true;
+    }
+
+    if (!args || !strlen(args)) {
+        return true;
+    }
+
+    JsonNode *root_node = json_decode(args);
+    if (!root_node) {
+        return false;
+    }
+
+    bool success = config_apply_json(root_node);
+
+    json_delete(root_node);
+
+    return success;
+}
+
+char *config_read(struct kr_coap_ctx *ctx)
+{
+    if (!ctx) {
+        return NULL;
+    }
+
+    JsonNode *root_node = json_mkobject();
+    if (!root_node) {
+        return NULL;
+    }
+
+    json_append_member(root_node, "host", json_mkstring(ctx->config.host));
+    json_append_member(root_node, "port", json_mknumber(ctx->config.port));
+
+    char *result = json_encode(root_node);
+    json_delete(root_node);
+    return result;
+}
+
+static char *coap_config(void *env, struct kr_module *module, const char *args)
+{
+    struct kr_coap_ctx *coap_ctx = module->data;
+    if (kr_fails_assert(coap_ctx)) {
+        return NULL;
+    }
+
+    config_apply(coap_ctx, args);
+
+    return config_read(coap_ctx);
+}
+
+// CONFIG END
 
 KR_EXPORT int coap_init(struct kr_module *module) {
 	/* Create a thread and start it in the background. */
@@ -191,9 +327,23 @@ KR_EXPORT int coap_init(struct kr_module *module) {
         printf("[ERROR] Failed to create thread: %s\n", strerror(errno));
 		return kr_error(errno);
 	}
+
 	/* Keep it in the thread */
-	module->data = (void*) thr_id;
-	return kr_ok();
+    // TODO: Fix
+	//module->data = (void*) thr_id;
+
+    struct engine *engine = module->data;
+    struct kr_coap_ctx *coap_ctx = &engine->resolver.coap_ctx;
+
+    int config_ret = config_init(coap_ctx);
+    if (config_ret != kr_ok()) {
+        return config_ret;
+    }
+
+    /* Replace engine pointer. */
+    module->data = coap_ctx;
+
+    return kr_ok();
 }
 
 KR_EXPORT int coap_deinit(struct kr_module *module) {
@@ -207,6 +357,7 @@ KR_EXPORT int coap_deinit(struct kr_module *module) {
 	}
 	return kr_ok();
 }
+
 
 /* Convenience macro to declare module ABI. */
 KR_MODULE_EXPORT(coap)
