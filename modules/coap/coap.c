@@ -1,19 +1,23 @@
 #include <pthread.h>
-#include <errno.h>
+#include <errno.h> 
 #include <stdio.h>
 #include <string.h>
+#include <ccan/json/json.h>
 #include <coap3/coap.h>
 #include <ldns/ldns.h>
 #include "lib/module.h"
-#include "daemon/engine.h"
-#include <ccan/json/json.h>
+#include "lib/defines.h"
 
+struct coap_config {
+    char* host;
+    int* port;
+};
 
 int resolveQuestion(char *qname, ldns_rr_type rr_type, ldns_rr_class rr_class, coap_session_t *session, coap_pdu_t *response) {
     printf("[DEBUG] Starting resolveQuestion()\n");
 
-    ldns_resolver *res = NULL;
-    ldns_rdf *ns = NULL;
+    ldns_resolver *res = NULL;     
+    ldns_rdf *ns = NULL;           
     ldns_buffer *buf = NULL;
 
     // point to knot-resolver
@@ -35,7 +39,7 @@ int resolveQuestion(char *qname, ldns_rr_type rr_type, ldns_rr_class rr_class, c
     ldns_pkt *q = ldns_pkt_query_new(domain, rr_type, rr_class, LDNS_RD);
     buf = ldns_buffer_new(512);
     ldns_pkt2buffer_wire(buf, q);
-
+    
     // dns answer
     ldns_pkt *answer;
     ldns_status s = ldns_resolver_send_pkt(&answer, res, q);
@@ -184,166 +188,20 @@ static void* run_coap_server(void *arg) {
     return;
 }
 
-// CONFIG BEGIN
-struct kr_coap_settings {
-    char* host;
-    int port;
-};
-
-struct kr_coap_ctx {
-    struct kr_coap_settings config;
-};
-
-static void kr_coap_ctx_init(struct kr_coap_ctx *ctx)
-{
-    if (!ctx) {
-        return;
-    }
-
-    memset(ctx, 0, sizeof(*ctx));
-
-    ctx->config.host = "127.0.0.1";
-    ctx->config.port = 53;
-}
-
-int config_init(struct kr_coap_ctx *ctx)
-{
-    if (!ctx) {
-        return kr_error(EINVAL);
-    }
-
-    kr_coap_ctx_init(ctx);
-
-    return kr_ok();
-}
-
-void config_deinit(struct kr_coap_ctx *ctx)
-{
-    if (!ctx) {
-        return;
-    }
-
-    free(ctx->config.host);
-    ctx->config.host = NULL;
-
-    free(ctx->config.port);
-    ctx->config.port = NULL;
-}
-
-static void apply_changes(const JsonNode *host,
-                          const JsonNode *port)
-{
-    if (kr_fails_assert(host && port)) {
-        return;
-    }
-
-    kr_assert(host->tag == JSON_STRING);
-    kr_assert(port->tag == JSON_NUMBER);
-
-    // TODO: Apply to running process
-    //host->string_;
-    //(int) host->number_;
-    printf(host->string_);
-}
-
-static bool config_apply_json(JsonNode *root_node)
-{
-    if (kr_fails_assert(root_node)) {
-        return false;
-    }
-
-    const JsonNode *host = json_find_member(root_node, "host");
-    const JsonNode *port = json_find_member(root_node, "port");
-
-    apply_changes(host, port);
-
-    return true;
-}
-
-bool config_apply(struct kr_coap_ctx *ctx, const char *args)
-{
-    if (!ctx) {
-        return false;
-    }
-
-    if (!args || !strlen(args)) {
-        return true;
-    }
-
-    if (!args || !strlen(args)) {
-        return true;
-    }
-
-    JsonNode *root_node = json_decode(args);
-    if (!root_node) {
-        return false;
-    }
-
-    bool success = config_apply_json(root_node);
-
-    json_delete(root_node);
-
-    return success;
-}
-
-char *config_read(struct kr_coap_ctx *ctx)
-{
-    if (!ctx) {
-        return NULL;
-    }
-
-    JsonNode *root_node = json_mkobject();
-    if (!root_node) {
-        return NULL;
-    }
-
-    json_append_member(root_node, "host", json_mkstring(ctx->config.host));
-    json_append_member(root_node, "port", json_mknumber(ctx->config.port));
-
-    char *result = json_encode(root_node);
-    json_delete(root_node);
-    return result;
-}
-
-static char *coap_config(void *env, struct kr_module *module, const char *args)
-{
-    struct kr_coap_ctx *coap_ctx = module->data;
-    if (kr_fails_assert(coap_ctx)) {
-        return NULL;
-    }
-
-    config_apply(coap_ctx, args);
-
-    return config_read(coap_ctx);
-}
-
-// CONFIG END
 
 KR_EXPORT int coap_init(struct kr_module *module) {
 	/* Create a thread and start it in the background. */
+    //struct coap_data *data = module->data;
+    //printf("%s", &data->host);
 	pthread_t thr_id;
 	int ret = pthread_create(&thr_id, NULL, &run_coap_server, NULL);
 	if (ret != 0) {
         printf("[ERROR] Failed to create thread: %s\n", strerror(errno));
 		return kr_error(errno);
 	}
-
 	/* Keep it in the thread */
-    // TODO: Fix
-	//module->data = (void*) thr_id;
-
-    struct engine *engine = module->data;
-    struct kr_coap_ctx *coap_ctx = &engine->resolver.coap_ctx;
-
-    int config_ret = config_init(coap_ctx);
-    if (config_ret != kr_ok()) {
-        return config_ret;
-    }
-
-    /* Replace engine pointer. */
-    module->data = coap_ctx;
-
-    return kr_ok();
+	module->data = (void*) thr_id;
+	return kr_ok();
 }
 
 KR_EXPORT int coap_deinit(struct kr_module *module) {
@@ -356,6 +214,72 @@ KR_EXPORT int coap_deinit(struct kr_module *module) {
 		return kr_error(errno);
 	}
 	return kr_ok();
+}
+
+static int find_string(const JsonNode *node, char **val, size_t len) {
+    if (!node || !node->key || kr_fails_assert(node->tag == JSON_STRING)) {
+        return kr_error(EINVAL);
+    }
+    *val = strndup(node->string_, len);
+    if (kr_fails_assert(*val != NULL)) {
+        return kr_error(errno);
+    }
+    return kr_ok();
+}
+
+static int find_int(const JsonNode *node, int **val) {
+    if (!node || !node->key || kr_fails_assert(node->tag == JSON_NUMBER)) {
+        return kr_error(EINVAL);
+    }
+    if (node->number_ < INT_MIN || node->number_ > INT_MAX) {
+        return kr_error(ERANGE);
+    }
+    if (kr_fails_assert(*val != NULL)) {
+        return kr_error(errno);
+    }
+
+    int int_val = (int) node->number_;
+    *val = &int_val;
+    return kr_ok();
+}
+
+KR_EXPORT int coap_config(struct kr_module *module, const char *conf) {
+    if (!conf) {
+        return kr_ok();
+    }
+
+    struct coap_config *config = module->data;
+
+    char* host = "127.0.0.1";
+    int default_port = KR_DNS_PORT;
+    int* port = &default_port;
+
+    if (strlen(conf) < 1) {
+        config->host = strdup(host);
+        config->port = port;
+    } else {
+        JsonNode *root_node = json_decode(conf);
+        if (!root_node) {
+            return kr_error(EINVAL);
+        }
+
+        JsonNode *node;
+        node = json_find_member(root_node, "host");
+        if (!node || find_string(node, &host, PATH_MAX) != kr_ok()) {
+            config->host = strdup(host);
+        }
+
+        node = json_find_member(root_node, "port");
+        if (!node || find_int(node, &port) != kr_ok()) {
+            config->port = port;
+        }
+
+        json_delete(root_node);
+    }
+
+    module->data = config;
+
+    return kr_ok();
 }
 
 

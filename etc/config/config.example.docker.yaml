@@ -22,6 +22,8 @@ network:
 lua:
   script:  |
     modules = {
-      'coap',
+      coap = {
+        host = "127.0.0.1"
+      }
     }
     net.ipv6 = false
