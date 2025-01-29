@@ -8,10 +8,16 @@
 #include "lib/module.h"
 #include "lib/defines.h"
 
-struct coap_config {
+typedef struct {
     char* host;
-    int* port;
+    uint16_t port;
+} coap_config_t;
+
+static coap_config_t config = {
+    .host = "127.0.0.1",
+    .port = 53
 };
+
 
 int resolveQuestion(char *qname, ldns_rr_type rr_type, ldns_rr_class rr_class, coap_session_t *session, coap_pdu_t *response) {
     printf("[DEBUG] Starting resolveQuestion()\n");
@@ -191,8 +197,7 @@ static void* run_coap_server(void *arg) {
 
 KR_EXPORT int coap_init(struct kr_module *module) {
 	/* Create a thread and start it in the background. */
-    //struct coap_data *data = module->data;
-    //printf("%s", &data->host);
+    printf("HIER IST DIE INIT FUNKTION\n");
 	pthread_t thr_id;
 	int ret = pthread_create(&thr_id, NULL, &run_coap_server, NULL);
 	if (ret != 0) {
@@ -244,19 +249,18 @@ static int find_int(const JsonNode *node, int **val) {
 }
 
 KR_EXPORT int coap_config(struct kr_module *module, const char *conf) {
+    printf("HIER IST DIE CONFIG");
     if (!conf) {
         return kr_ok();
     }
-
-    struct coap_config *config = module->data;
 
     char* host = "127.0.0.1";
     int default_port = KR_DNS_PORT;
     int* port = &default_port;
 
     if (strlen(conf) < 1) {
-        config->host = strdup(host);
-        config->port = port;
+        config.host = strdup(host);
+        config.port = port;
     } else {
         JsonNode *root_node = json_decode(conf);
         if (!root_node) {
@@ -266,22 +270,21 @@ KR_EXPORT int coap_config(struct kr_module *module, const char *conf) {
         JsonNode *node;
         node = json_find_member(root_node, "host");
         if (!node || find_string(node, &host, PATH_MAX) != kr_ok()) {
-            config->host = strdup(host);
+            config.host = strdup(host);
         }
 
         node = json_find_member(root_node, "port");
         if (!node || find_int(node, &port) != kr_ok()) {
-            config->port = port;
+            config.port = port;
         }
 
         json_delete(root_node);
     }
 
-    module->data = config;
+    // Config apply
 
     return kr_ok();
 }
-
 
 /* Convenience macro to declare module ABI. */
 KR_MODULE_EXPORT(coap)
