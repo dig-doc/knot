@@ -10,7 +10,7 @@
 
 typedef struct {
     char* host;
-    uint16_t port;
+    u_int16_t port;
 } coap_config_t;
 
 static coap_config_t config = {
@@ -197,7 +197,6 @@ static void* run_coap_server(void *arg) {
 
 KR_EXPORT int coap_init(struct kr_module *module) {
 	/* Create a thread and start it in the background. */
-    printf("HIER IST DIE INIT FUNKTION\n");
 	pthread_t thr_id;
 	int ret = pthread_create(&thr_id, NULL, &run_coap_server, NULL);
 	if (ret != 0) {
@@ -249,7 +248,6 @@ static int find_int(const JsonNode *node, int **val) {
 }
 
 KR_EXPORT int coap_config(struct kr_module *module, const char *conf) {
-    printf("HIER IST DIE CONFIG");
     if (!conf) {
         return kr_ok();
     }
@@ -269,12 +267,12 @@ KR_EXPORT int coap_config(struct kr_module *module, const char *conf) {
 
         JsonNode *node;
         node = json_find_member(root_node, "host");
-        if (!node || find_string(node, &host, PATH_MAX) != kr_ok()) {
+        if (!node || find_string(node, &host, PATH_MAX) == kr_ok()) {
             config.host = strdup(host);
         }
 
         node = json_find_member(root_node, "port");
-        if (!node || find_int(node, &port) != kr_ok()) {
+        if (!node || find_int(node, &port) == kr_ok()) {
             config.port = port;
         }
 
