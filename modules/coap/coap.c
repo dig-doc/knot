@@ -27,10 +27,10 @@ int resolveQuestion(char *qname, ldns_rr_type rr_type, ldns_rr_class rr_class, c
     ldns_buffer *buf = NULL;
 
     // point to knot-resolver
-    ns = ldns_rdf_new_frm_str(LDNS_RDF_TYPE_A, "127.0.0.1");
+    ns = ldns_rdf_new_frm_str(LDNS_RDF_TYPE_A, config.host);
     res = ldns_resolver_new();
     ldns_resolver_push_nameserver(res, ns);
-    ldns_resolver_set_port(res, 53);
+    ldns_resolver_set_port(res, config.port);
 
     // check if resolver is set
     if(!res) {
@@ -196,15 +196,7 @@ static void* run_coap_server(void *arg) {
 
 
 KR_EXPORT int coap_init(struct kr_module *module) {
-	/* Create a thread and start it in the background. */
-	pthread_t thr_id;
-	int ret = pthread_create(&thr_id, NULL, &run_coap_server, NULL);
-	if (ret != 0) {
-        printf("[ERROR] Failed to create thread: %s\n", strerror(errno));
-		return kr_error(errno);
-	}
-	/* Keep it in the thread */
-	module->data = (void*) thr_id;
+	
 	return kr_ok();
 }
 
@@ -279,8 +271,15 @@ KR_EXPORT int coap_config(struct kr_module *module, const char *conf) {
         json_delete(root_node);
     }
 
-    // Config apply
-
+    /* Create a thread and start it in the background. */
+	pthread_t thr_id;
+	int ret = pthread_create(&thr_id, NULL, &run_coap_server, NULL);
+	if (ret != 0) {
+        printf("[ERROR] Failed to create thread: %s\n", strerror(errno));
+		return kr_error(errno);
+	}
+	/* Keep it in the thread */
+	module->data = (void*) thr_id;
     return kr_ok();
 }
 
