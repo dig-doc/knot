@@ -240,15 +240,11 @@ static int find_int(const JsonNode *node, u_int16_t **val) {
 }
 
 KR_EXPORT int coap_config(struct kr_module *module, const char *conf) {
-    if (!conf) {
-        return kr_ok();
-    }
-
     char* host = "127.0.0.1";
     int default_port = KR_DNS_PORT;
     u_int16_t* port = &default_port;
 
-    if (strlen(conf) < 1) {
+    if (!conf || strlen(conf) < 1) {
         config.host = strdup(host);
         config.port = *port;
     } else {
@@ -272,14 +268,14 @@ KR_EXPORT int coap_config(struct kr_module *module, const char *conf) {
     }
 
     /* Create a thread and start it in the background. */
-	pthread_t thr_id;
-	int ret = pthread_create(&thr_id, NULL, &run_coap_server, NULL);
-	if (ret != 0) {
+    pthread_t thr_id;
+    int ret = pthread_create(&thr_id, NULL, &run_coap_server, NULL);
+    if (ret != 0) {
         printf("[ERROR] Failed to create thread: %s\n", strerror(errno));
-		return kr_error(errno);
-	}
-	/* Keep it in the thread */
-	module->data = (void*) thr_id;
+	    return kr_error(errno);
+    }
+    /* Keep it in the thread */
+    module->data = (void*) thr_id;
     return kr_ok();
 }
 
