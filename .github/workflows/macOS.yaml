@@ -18,7 +18,7 @@ jobs:
 
       - name: Install dependecies from brew
         run:
-          brew install cmocka luajit libuv lmdb meson nghttp2 autoconf automake m4 libtool pkg-config libcoap ldns
+          brew install cmocka luajit libuv lmdb meson nghttp2 autoconf automake m4 libtool pkg-config libcoap ldns openssl@3
 
       - name: Install libknot from sources
         env:
