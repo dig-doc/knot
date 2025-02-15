@@ -231,19 +231,19 @@ static int find_string(const JsonNode *node, char **val, size_t len) {
     return kr_ok();
 }
 
-static int find_int(const JsonNode *node, int **val) {
+static int find_int(const JsonNode *node, u_int16_t **val) {
     if (!node || !node->key || kr_fails_assert(node->tag == JSON_NUMBER)) {
         return kr_error(EINVAL);
     }
-    if (node->number_ < INT_MIN || node->number_ > INT_MAX) {
+    if (node->number_ < 0 || node->number_ > USHRT_MAX) {
         return kr_error(ERANGE);
     }
     if (kr_fails_assert(*val != NULL)) {
         return kr_error(errno);
     }
 
-    int int_val = (int) node->number_;
-    *val = &int_val;
+    u_int16_t int_val = (u_int16_t) node->number_;
+    **val = int_val;
     return kr_ok();
 }
 
@@ -254,11 +254,11 @@ KR_EXPORT int coap_config(struct kr_module *module, const char *conf) {
 
     char* host = "127.0.0.1";
     int default_port = KR_DNS_PORT;
-    int* port = &default_port;
+    u_int16_t* port = &default_port;
 
     if (strlen(conf) < 1) {
         config.host = strdup(host);
-        config.port = port;
+        config.port = *port;
     } else {
         JsonNode *root_node = json_decode(conf);
         if (!root_node) {
@@ -273,7 +273,7 @@ KR_EXPORT int coap_config(struct kr_module *module, const char *conf) {
 
         node = json_find_member(root_node, "port");
         if (!node || find_int(node, &port) == kr_ok()) {
-            config.port = port;
+            config.port = *port;
         }
 
         json_delete(root_node);
