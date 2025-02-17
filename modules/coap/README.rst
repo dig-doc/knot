@@ -1,6 +1,6 @@
 .. _mod-coap:
 
-COAP
+CoAP
 ==============
 
 The ``coap`` module implements DNS over COAP.
@@ -8,6 +8,21 @@ The ``coap`` module implements DNS over COAP.
 .. code-block:: lua
 
         modules.unload('coap')
+
+Config
+================
+.. code-block:: yaml
+
+    lua:
+      script:  |
+        modules = {
+            coap = {
+                host = 127.0.0.1,
+                port = 53
+            }
+        }
+        net.ipv6 = false
+
 
 Building and Running with Docker
 ================================
