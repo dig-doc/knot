@@ -23,8 +23,8 @@ lua:
   script:  |
     modules = {
       coap = {
-        host = "127.0.0.2",
-        port = 5300
+        host = "127.0.0.1",
+        port = 53
       }
     }
     net.ipv6 = false
