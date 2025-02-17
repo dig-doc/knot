@@ -32,8 +32,8 @@ To build the Docker image, navigate to the directory containing the Dockerfile a
 .. code-block:: bash
     docker build -t knot-resolver-coap .
 
-    To run the Docker container with the host network, use the following command:
+To run the Docker container with the host network, use the following command:
 
-    .. code-block:: bash
+.. code-block:: bash
 
     docker run --network host knot-resolver-coap
