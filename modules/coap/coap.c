@@ -157,14 +157,14 @@ static void* run_coap_server(void *arg) {
     ctx = coap_new_context(NULL);
     if (!ctx) {
         printf("[ERROR] Failed to create CoAP context\n");
-        return;
+        return NULL;
     }
 
     endpoint = coap_new_endpoint(ctx, &serv_addr, COAP_PROTO_UDP);
     if (!endpoint) {
         printf("[ERROR] Failed to create endpoint\n");
         coap_free_context(ctx);
-        return;
+        return NULL;
     }
 
     // uri-format: coap://localhost/dns
@@ -172,7 +172,7 @@ static void* run_coap_server(void *arg) {
     if (!resource) {
         printf("[ERROR] Failed to create resource\n");
         coap_free_context(ctx);
-        return;
+        return NULL;
     }
 
     coap_register_handler(resource, COAP_REQUEST_FETCH, handler_coap_request);
@@ -191,7 +191,7 @@ static void* run_coap_server(void *arg) {
     coap_free_context(ctx);
     coap_cleanup();
 
-    return;
+    return NULL;
 }
 
 
@@ -241,7 +241,7 @@ static int find_int(const JsonNode *node, u_int16_t **val) {
 
 KR_EXPORT int coap_config(struct kr_module *module, const char *conf) {
     char* host = "127.0.0.1";
-    int default_port = KR_DNS_PORT;
+    u_int16_t default_port = KR_DNS_PORT;
     u_int16_t* port = &default_port;
 
     if (!conf || strlen(conf) < 1) {
