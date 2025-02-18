@@ -1,12 +1,17 @@
 #include <pthread.h>
-#include <errno.h> 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
 #include <ccan/json/json.h>
 #include <coap3/coap.h>
 #include <ldns/ldns.h>
 #include "lib/module.h"
 #include "lib/defines.h"
+
+
+static ldns_resolver *g_resolver = NULL;
+static ldns_rdf *g_ns = NULL;
 
 typedef struct {
     char* host;
@@ -18,80 +23,81 @@ static coap_config_t config = {
     .port = 53
 };
 
-
 int resolveQuestion(char *qname, ldns_rr_type rr_type, ldns_rr_class rr_class, coap_session_t *session, coap_pdu_t *response) {
-    printf("[DEBUG] Starting resolveQuestion()\n");
+                    
+    printf("[DEBUG] resolveQuestion(%s)", qname);
 
-    ldns_resolver *res = NULL;     
-    ldns_rdf *ns = NULL;           
-    ldns_buffer *buf = NULL;
-
-    // point to knot-resolver
-    ns = ldns_rdf_new_frm_str(LDNS_RDF_TYPE_A, config.host);
-    res = ldns_resolver_new();
-    ldns_resolver_push_nameserver(res, ns);
-    ldns_resolver_set_port(res, config.port);
-
-    // check if resolver is set
-    if(!res) {
-        printf("[ERROR] Failed to create resolver\n");
-        ldns_resolver_deep_free(res);
-        ldns_rdf_deep_free(ns);
+    if (!g_resolver) {
+        printf("[ERROR] Resolver nicht initialisiert\n");
         return kr_ok();
     }
 
-    // dns paket
     ldns_rdf *domain = ldns_dname_new_frm_str(qname);
+
+    if (!domain) {
+        printf("[ERROR] ldns_rdf fehlgeschlagen\n");
+        return kr_ok();
+    }
+
     ldns_pkt *q = ldns_pkt_query_new(domain, rr_type, rr_class, LDNS_RD);
-    buf = ldns_buffer_new(512);
+
+    if (!q) {
+        printf("[ERROR] *q fehlgeschlagen\n");
+        ldns_rdf_deep_free(domain);
+        return kr_ok();
+    }
+
+    ldns_buffer *buf = ldns_buffer_new(512);
+    if (!buf) {
+        printf("[ERROR] ldns_buffer_new() fehlgeschlagen\n");
+        ldns_pkt_free(q);
+        ldns_rdf_deep_free(domain);
+        return kr_ok();
+    }
+
     ldns_pkt2buffer_wire(buf, q);
-    
-    // dns answer
-    ldns_pkt *answer;
-    ldns_status s = ldns_resolver_send_pkt(&answer, res, q);
+    ldns_pkt *answer = NULL;
+    ldns_status s = ldns_resolver_send_pkt(&answer, g_resolver, q);
+
     if (s != LDNS_STATUS_OK) {
-        printf("Error: %s\n", ldns_get_errorstr_by_id(s));
-        ldns_resolver_deep_free(res);
-        ldns_rdf_deep_free(ns);
+        printf("[ERROR] ldns_resolver_send_pkt() fehlgeschlagen: %s\n", ldns_get_errorstr_by_id(s));
+        ldns_rdf_deep_free(domain);
+        ldns_pkt_free(q);
+        ldns_buffer_free(buf);
+        return kr_ok();
+    }
+    ldns_buffer *bufdns = ldns_buffer_new(512);
+
+    if (!bufdns) {
+        printf("[ERROR] ldns_buffer_new() fehlgeschlagen\n");
+        ldns_pkt_free(answer);
         ldns_rdf_deep_free(domain);
         ldns_pkt_free(q);
         ldns_buffer_free(buf);
         return kr_ok();
     }
 
-    // create new empty buffer
-    ldns_buffer *bufdns = ldns_buffer_new(512); 
-
-    // copy answer-data to buffer
-    ldns_pkt2buffer_wire(bufdns, answer); 
+    ldns_pkt2buffer_wire(bufdns, answer);
     uint8_t *data = ldns_buffer_begin(bufdns);
     size_t len = ldns_buffer_position(bufdns);
-
-    // add data befor headers - to improve speed
-    coap_add_data(response, len, data);
+    
+    // optlist
     coap_pdu_set_code(response, COAP_RESPONSE_CODE_CONTENT);
-
-    // add coap related headers    
     coap_optlist_t *optlist = NULL;
     unsigned char buffer_coap[512];
-    len = coap_encode_var_safe(buffer_coap, 512, 553);
-    coap_insert_optlist(&optlist, coap_new_optlist(COAP_OPTION_CONTENT_FORMAT, len, buffer_coap));
-    coap_insert_optlist(&optlist, coap_new_optlist(COAP_OPTION_ACCEPT, len, buffer_coap));
+    size_t opt_len = coap_encode_var_safe(buffer_coap, sizeof(buffer_coap), 553);
+    coap_insert_optlist(&optlist, coap_new_optlist(COAP_OPTION_CONTENT_FORMAT, opt_len, buffer_coap));
+    coap_insert_optlist(&optlist, coap_new_optlist(COAP_OPTION_ACCEPT, opt_len, buffer_coap));
     coap_add_optlist_pdu(response, &optlist);
-    
-    // print answer
-    ldns_pkt_print(stdout, answer);
-    printf("\n");
+    // payload
+    coap_add_data(response, len, data);
 
-    // free memory
-    ldns_resolver_deep_free(res);
-    ldns_rdf_deep_free(ns);
+    // debug:
+    ldns_pkt_print(stdout, answer);
+
     ldns_rdf_deep_free(domain);
-    ldns_pkt_free(q);
-    ldns_buffer_free(buf);
     ldns_pkt_free(answer);
-    ldns_buffer_free(bufdns);
-    coap_delete_optlist(optlist);
+
     return kr_ok();
 }
 
@@ -107,32 +113,58 @@ static void handler_coap_request(coap_resource_t *resource, coap_session_t *sess
 
     // printf("PDU\n");
     // coap_show_pdu(LOG_INFO, receivedPdu);
-    
     // convert pdu to ldns packet
-    const uint16_t* data = (const uint16_t*)buffer;
-    ldns_buffer *ldnsBuffer = NULL;
+    ldns_buffer *ldnsBuffer = ldns_buffer_new(512);
+
+    if (!ldnsBuffer) {
+        return;
+    }
+
+    ldns_buffer_write(ldnsBuffer, buffer, len);
     ldns_pkt *pkt = NULL;
-    ldnsBuffer = ldns_buffer_new(512);
-    ldns_buffer_write(ldnsBuffer, data, len);
     ldns_buffer2pkt_wire(&pkt, ldnsBuffer);
+
+    if (!pkt) {
+        ldns_buffer_free(ldnsBuffer);
+        return;
+    }
+
     ldns_rr_list *rrList = ldns_pkt_question(pkt);
-    
+    if (!rrList) {
+        ldns_pkt_free(pkt);
+        ldns_buffer_free(ldnsBuffer);
+        return;
+    }
+
     // no question-section in packet -> nothing todo
     if(rrList->_rr_count <= 0){
         ldns_pkt_free(pkt);
         ldns_buffer_free(ldnsBuffer);
         return;
     }
-    
+
     // extract domain name, record/class type from question
     ldns_rr *question = ldns_rr_list_rr(rrList, 0);
-    char* domain_str = ldns_rdf2str(ldns_rr_owner(question));
+
+    if (!question) {
+        ldns_pkt_free(pkt);
+        ldns_buffer_free(ldnsBuffer);
+        return;
+    }
+
+    char *domain_str = ldns_rdf2str(ldns_rr_owner(question));
+    if (!domain_str) {
+        ldns_pkt_free(pkt);
+        ldns_buffer_free(ldnsBuffer);
+        return;
+    }
+
     ldns_rr_type rr_type = ldns_rr_get_type(question);
     ldns_rr_class rr_class = ldns_rr_get_class(question);
-    
+
     resolveQuestion(domain_str, rr_type, rr_class, session, response);
 
-    free(domain_str); 
+    free(domain_str);
     ldns_pkt_free(pkt);
     ldns_buffer_free(ldnsBuffer);
 
@@ -184,7 +216,7 @@ static void* run_coap_server(void *arg) {
     while (1) {
         result = coap_io_process(ctx, 1000);
         if (result < 0) {
-            break;
+	 break;
         }
     }
 
@@ -197,24 +229,30 @@ static void* run_coap_server(void *arg) {
 
 KR_EXPORT int coap_init(struct kr_module *module) {
 	
-	return kr_ok();
+    return kr_ok();
 }
 
 KR_EXPORT int coap_deinit(struct kr_module *module) {
 	/* ... signalize cancellation ... */
-	void *res = NULL;
-	pthread_t thr_id = (pthread_t) module->data;
-	int ret = pthread_join(thr_id, &res);
-	if (ret != 0) {
+    void *res = NULL;
+    pthread_t thr_id = (pthread_t) module->data;
+    int ret = pthread_join(thr_id, &res);
+    if (ret != 0) {
         printf("[ERROR] Failed to join thread: %s\n", strerror(errno));
-		return kr_error(errno);
-	}
-	return kr_ok();
+        return kr_error(errno);
+    }
+
+    if (g_resolver) {
+        ldns_resolver_deep_free(g_resolver);
+        g_resolver = NULL;
+    }
+
+    return kr_ok();
 }
 
 static int find_string(const JsonNode *node, char **val, size_t len) {
     if (!node || !node->key || kr_fails_assert(node->tag == JSON_STRING)) {
-        return kr_error(EINVAL);
+	return kr_error(EINVAL);
     }
     *val = strndup(node->string_, len);
     if (kr_fails_assert(*val != NULL)) {
@@ -267,17 +305,26 @@ KR_EXPORT int coap_config(struct kr_module *module, const char *conf) {
         json_delete(root_node);
     }
 
-    /* Create a thread and start it in the background. */
+    g_ns = ldns_rdf_new_frm_str(LDNS_RDF_TYPE_A, config.host);
+    if (!g_ns) {
+        return kr_error(errno);
+    }
+    g_resolver = ldns_resolver_new();
+    if (!g_resolver) {
+        ldns_rdf_deep_free(g_ns);
+        return kr_error(errno);
+    }
+    ldns_resolver_push_nameserver(g_resolver, g_ns);
+    ldns_resolver_set_port(g_resolver, config.port);
+    printf("[DEBUG] ldns-Resolver: host=%s, port=%u\n", config.host, config.port);
+
     pthread_t thr_id;
     int ret = pthread_create(&thr_id, NULL, &run_coap_server, NULL);
     if (ret != 0) {
-        printf("[ERROR] Failed to create thread: %s\n", strerror(errno));
-	    return kr_error(errno);
+        return kr_error(errno);
     }
-    /* Keep it in the thread */
     module->data = (void*) thr_id;
     return kr_ok();
 }
 
-/* Convenience macro to declare module ABI. */
 KR_MODULE_EXPORT(coap)
